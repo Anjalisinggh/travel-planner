@@ -335,7 +335,7 @@ export default function Home() {
         </p>
 
         <div className="hero-body">
-          <p className="hero-eyebrow kicker"><i className="rule" /> Journeys, composed by hand</p>
+          <p className="hero-eyebrow kicker">Journeys, composed by hand</p>
           <h1>{destination},<br />made <span className="accent">unforgettable</span>.</h1>
           <p className="hero-copy">
             {duration} days shaped around {interests.slice(0, 3).join(", ").toLowerCase()} — with live
