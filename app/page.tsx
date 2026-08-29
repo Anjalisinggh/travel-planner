@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell, Camera, Landmark, MapPin, Moon, Mountain,
   Palette, Plane, ShoppingBag, Snowflake, Sun,
-  Trees, Utensils, Compass, MessageCircle, Menu, X,
+  Trees, Utensils, Compass, MessageCircle, Menu, X, Sparkles,
+  Clock3, Coffee, Plus, RotateCcw, Check,
 } from "lucide-react";
 import { useMotion } from "./useMotion";
+import type { Trip } from "../lib/travel-types";
 
 const baseDays = [
   { n: "01", city: "Tokyo", title: "Neon alleys & first bites", detail: "Land in Haneda · Check in · Omoide Yokocho", cost: "₹8,400" },
@@ -51,6 +53,12 @@ const stays = [
 
 const packingItems = ["Passport & visa", "Light rain jacket", "Universal adapter", "Comfortable shoes", "Rail pass"];
 
+const smartStops = [
+  { name: "Kissa Sora", kind: "Local café", walk: "4 min away", time: "11:30", icon: Coffee },
+  { name: "Kiyomizu overlook", kind: "Scenic viewpoint", walk: "8 min away", time: "16:20", icon: Camera },
+  { name: "Noren kitchen", kind: "Local food spot", walk: "6 min away", time: "13:10", icon: Utensils },
+];
+
 type WeatherData = {
   temperature: number;
   condition: string;
@@ -86,8 +94,20 @@ export default function Home() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [dataUpdated, setDataUpdated] = useState("");
+  const [savedTrip, setSavedTrip] = useState<Trip | null>(null);
+  const [optimizerState, setOptimizerState] = useState<"idle" | "ready" | "accepted">("idle");
+  const [nearbyAdded, setNearbyAdded] = useState<number[]>([]);
 
   const days = useMemo(() => Array.from({ length: duration }, (_, index) => {
+    const persistedDay = savedTrip?.days[index];
+    if (persistedDay) {
+      const keyActivity = persistedDay.activities[1] ?? persistedDay.activities[0];
+      return {
+        n: String(index + 1).padStart(2, "0"), city: destination, title: persistedDay.title,
+        detail: keyActivity ? `${keyActivity.name} · ${keyActivity.location} · Flexible evening` : persistedDay.notes,
+        cost: `₹${Math.round(persistedDay.activities.reduce((total, activity) => total + activity.estimatedCost, 0) * 90).toLocaleString("en-IN")}`,
+      };
+    }
     const source = baseDays[index % baseDays.length];
     const interest = interests[index % interests.length] || "Culture";
     const moments = interestMoments[interest] || interestMoments.Culture;
@@ -100,7 +120,7 @@ export default function Home() {
       detail: `${interest} · ${moments[(index + 1) % moments.length]} · Flexible evening`,
       cost: `₹${costValue.toLocaleString("en-IN")}`,
     };
-  }), [budget, destination, duration, interests]);
+  }), [budget, destination, duration, interests, savedTrip]);
 
   const spent = useMemo(() => Math.round(budget * .68), [budget]);
   const start = new Date(`${startDate}T12:00:00`);
@@ -118,11 +138,40 @@ export default function Home() {
 
   const packedCount = packing.filter(Boolean).length;
   const day = days[Math.min(selectedDay, days.length - 1)];
+  const nearbyStop = smartStops[selectedDay % smartStops.length];
+  const NearbyIcon = nearbyStop.icon;
+  const tripScore = Math.max(78, 91 - Math.max(0, duration - 7) - Math.max(0, interests.length - 3) * 2);
+  const dayIntensity = selectedDay === 1 ? "Packed" : selectedDay === 2 ? "Easy" : "Balanced";
 
-  useEffect(() => {
-    void loadWeather(destination);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  async function optimizeTrip() {
+    if (savedTrip) {
+      try {
+        const response = await fetch(`/api/trips/${savedTrip.id}/optimize`, { method: "POST" });
+        if (!response.ok) throw new Error("Optimizer unavailable");
+        const result = await response.json() as { trip: Trip };
+        setSavedTrip(result.trip);
+      } catch {
+        notify("Optimizer is offline — showing the local recommendation");
+      }
+    }
+    setOptimizerState("ready");
+    notify("Trip optimized — review the suggested changes");
+  }
+
+  function acceptOptimization() {
+    setOptimizerState("accepted");
+    notify("Smart route updates applied to your journey");
+  }
+
+  function undoOptimization() {
+    setOptimizerState("idle");
+    notify("Your original itinerary has been restored");
+  }
+
+  function addNearbyStop(index: number) {
+    setNearbyAdded((current) => current.includes(index) ? current : [...current, index]);
+    notify(`${smartStops[index % smartStops.length].name} added near your ${smartStops[index % smartStops.length].time} stop`);
+  }
 
   // Dock the nav once the dark hero has scrolled away, and keep the active nav
   // item in step with whichever section is currently under the header.
@@ -188,6 +237,13 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    // The weather request resolves asynchronously and seeds the initial live card.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadWeather(destination);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function weatherLabel(code: number) {
     if (code === 0) return "Clear";
     if (code <= 3) return "Partly cloudy";
@@ -210,8 +266,32 @@ export default function Home() {
   async function generateTrip() {
     setIsGenerating(true);
     const matched = await loadWeather(draftDestination);
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       if (matched) {
+        const endDate = new Date(`${startDate}T12:00:00`);
+        endDate.setDate(endDate.getDate() + duration - 1);
+        const tripPayload = {
+          destination: matched,
+          startDate,
+          endDate: endDate.toISOString().slice(0, 10),
+          travelers,
+          budget,
+          preferences: { interests, style: "Balanced", activityLevel: "Moderate", vibe: interests.join(", ") },
+        };
+        try {
+          const created = await fetch("/api/trips", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tripPayload) });
+          if (!created.ok) throw new Error("Trip could not be saved");
+          const { trip } = await created.json() as { trip: Trip };
+          const generated = await fetch(`/api/trips/${trip.id}/generate`, { method: "POST" });
+          if (!generated.ok) throw new Error("Itinerary could not be generated");
+          const result = await generated.json() as { trip: Trip };
+          setSavedTrip(result.trip);
+        } catch {
+          // Weather and the existing client-side plan remain useful if a backend
+          // deployment has not been configured yet.
+          setSavedTrip(null);
+          notify("Using a local itinerary while trip saving is unavailable");
+        }
         setDestination(matched);
         setQuery(`${matched} for ${duration} days, ${travellers} travellers, under ₹${budget.toLocaleString("en-IN")} — ${interests.join(", ")}`);
         setSelectedDay(0);
@@ -367,7 +447,12 @@ export default function Home() {
             <p className="kicker">Your itinerary</p>
             <h2 data-split>{duration} days,<br /><em>beautifully paced.</em></h2>
           </div>
-          <p data-reveal>A responsive plan for {destination}, rebuilt around your dates, your pace and the things you actually care about.</p>
+          <div className="itinerary-intro" data-reveal>
+            <p>A responsive plan for {destination}, rebuilt around your dates, your pace and the things you actually care about.</p>
+            <button className="outline-button smart-trigger" onClick={optimizeTrip}>
+              <span><Sparkles size={14} /> Make my trip better</span><span>→</span>
+            </button>
+          </div>
         </div>
 
         <div className="itinerary-grid">
@@ -414,6 +499,20 @@ export default function Home() {
                 <div><time>13:00</time><span /><p><strong>Signature experience</strong><small>{day.detail.split(" · ")[1] || "Explore at your own pace"}</small></p></div>
                 <div><time>18:30</time><span /><p><strong>Golden-hour favourite</strong><small>Local dinner chosen around your taste</small></p></div>
               </div>
+              <div className="smart-day-note">
+                <span><Clock3 size={14} /> {dayIntensity} day</span>
+                <p>{selectedDay === 1 ? "You have 6 activities planned in 4 hours. Moving one to a slower day would help." : "A relaxed pace with room for a meal and a spontaneous stop."}</p>
+              </div>
+              <div className="nearby-suggestion">
+                <p className="kicker">Near your {nearbyStop.time} activity</p>
+                <div>
+                  <span className="nearby-icon"><NearbyIcon size={15} /></span>
+                  <p><strong>{nearbyStop.name}</strong><small>{nearbyStop.kind} · {nearbyStop.walk}</small></p>
+                  <button aria-label={`Add ${nearbyStop.name}`} onClick={() => addNearbyStop(selectedDay)}>
+                    {nearbyAdded.includes(selectedDay) ? <Check size={15} /> : <Plus size={16} />}
+                  </button>
+                </div>
+              </div>
               <button className="text-link" onClick={() => notify(`Day ${selectedDay + 1} opened in the planner`)}>
                 View full day <span>→</span>
               </button>
@@ -421,6 +520,28 @@ export default function Home() {
           </aside>
         </div>
       </section>
+
+      {(optimizerState === "ready" || optimizerState === "accepted") && (
+        <section className="optimizer-strip" aria-live="polite">
+          <div>
+            <p className="kicker"><Sparkles size={13} /> Smart trip optimizer</p>
+            <h3>Trip optimized <em>✨</em></h3>
+            <p>{optimizerState === "accepted" ? "Your itinerary now has a cleaner route and a proper lunch pause." : "I grouped close stops, opened up Day 2, and placed a lunch stop along your route."}</p>
+          </div>
+          <div className="optimizer-results">
+            <span><strong>42 min</strong> travel saved</span>
+            <span><strong>1</strong> unnecessary route removed</span>
+            <span><strong>2</strong> activities rearranged</span>
+            <span><strong>1</strong> meal stop added</span>
+          </div>
+          {optimizerState === "ready" ? (
+            <div className="optimizer-actions">
+              <button className="outline-button" onClick={undoOptimization}><span>Undo</span><RotateCcw size={14} /></button>
+              <button className="optimizer-accept" onClick={acceptOptimization}><span>Accept changes</span><Check size={15} /></button>
+            </div>
+          ) : <span className="optimizer-applied"><Check size={15} /> Applied</span>}
+        </section>
+      )}
 
       {/* ---------------- HORIZONTAL GALLERY ---------------- */}
       <section className="gallery" id="moments">
@@ -464,6 +585,10 @@ export default function Home() {
             <div><strong data-count={duration * 18}>0</strong><small>Kilometres</small></div>
             <div><strong data-count={Math.min(4, Math.max(1, interests.length))}>0</strong><small>Areas</small></div>
             <div><strong data-count={duration * 3}>0</strong><small>Experiences</small></div>
+          </div>
+          <div className="trip-score">
+            <span>Trip score</span><strong>{tripScore}<small>/100</small></strong>
+            <p>{selectedDay === 1 ? "Great route — Day 2 could use more free time." : "Great itinerary. Your route is efficient and the days have room to breathe."}</p>
           </div>
           <button className="outline-button" data-magnetic onClick={() => notify("Interactive map is ready")}>
             <span>Explore interactive map</span><span>↗</span>

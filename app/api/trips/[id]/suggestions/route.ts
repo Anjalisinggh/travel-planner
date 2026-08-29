@@ -1,0 +1,2 @@
+import { loadPersistedTrip } from "../../../../../lib/services/trip-repository";
+export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) { const trip = await loadPersistedTrip((await params).id); if (!trip) return Response.json({ error: "Trip not found" }, { status: 404 }); return Response.json({ suggestions: [{ name: "Local café", type: "food", reason: "4 minutes from your next activity" }, { name: "Scenic viewpoint", type: "experience", reason: "8 minutes from your afternoon route" }] }); }

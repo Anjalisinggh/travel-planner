@@ -25,6 +25,15 @@ This starter does not use `wrangler.jsonc`.
 - `vite.config.ts` simulates declared bindings for local development
 - `db/schema.ts` starts intentionally empty
 - `examples/d1/` contains an optional D1 example surface
+
+## Travel planner backend
+
+The planner exposes `POST /api/trips`, `GET|PUT|DELETE /api/trips/:id`, and
+generation, optimization, and nearby-suggestion endpoints beneath each trip.
+The Drizzle schema and `drizzle/0000_spotty_wendigo.sql` migration define users,
+trips, itinerary days, and activities. Bind a Cloudflare D1 database as `DB`
+before deploying to persist trips; local previews gracefully use an in-memory
+fallback. Copy `.env.example` for server-only third-party service credentials.
 - `drizzle.config.ts` supports local migration generation when needed
 
 ## Workspace Auth Headers

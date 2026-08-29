@@ -306,6 +306,10 @@ em{font-style:italic;color:var(--terracotta)}
 .section-heading .kicker{margin-bottom:20px}
 .section-heading>p{margin:0;color:var(--ink-soft);max-width:42ch;font-size:15px;line-height:1.75}
 .section-heading.compact{align-items:center}
+.itinerary-intro{display:flex;flex-direction:column;align-items:flex-start;gap:20px}
+.itinerary-intro p{margin:0;color:var(--ink-soft);max-width:42ch;font-size:15px;line-height:1.75}
+.smart-trigger{padding:13px 16px;font-size:9px}
+.smart-trigger span:first-child{display:inline-flex;align-items:center;gap:8px}
 
 /* ============================================================
    ITINERARY
@@ -363,12 +367,27 @@ em{font-style:italic;color:var(--terracotta)}
 .timeline p{margin:0;display:flex;flex-direction:column;gap:4px}
 .timeline strong{font-weight:600;font-size:14px}
 .timeline small{font-size:12px;color:var(--muted)}
+.smart-day-note{padding:14px 0;border-bottom:1px solid var(--line-soft);display:flex;flex-direction:column;gap:6px}
+.smart-day-note span{display:flex;align-items:center;gap:7px;font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--terracotta)}
+.smart-day-note p{margin:0;font-size:12px;line-height:1.55;color:var(--ink-soft)}
+.nearby-suggestion{padding:17px 0 0}
+.nearby-suggestion .kicker{margin:0 0 10px;font-size:8px}
+.nearby-suggestion>div{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;background:var(--sand);padding:11px}
+.nearby-icon{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:var(--bone);color:var(--terracotta)}
+.nearby-suggestion p{margin:0;display:flex;flex-direction:column;gap:2px}.nearby-suggestion strong{font-size:12px}.nearby-suggestion small{font-size:10px;color:var(--muted)}
+.nearby-suggestion button{width:30px;height:30px;display:grid;place-items:center;background:var(--ink);color:var(--bone);transition:.25s}.nearby-suggestion button:hover{background:var(--terracotta);transform:rotate(90deg)}
 .text-link{
   display:inline-flex;align-items:center;gap:10px;margin-top:24px;
   font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
   border-bottom:1px solid var(--line);padding-bottom:7px;transition:gap .35s,border-color .35s,color .35s;
 }
 .text-link:hover{gap:18px;border-color:var(--terracotta);color:var(--terracotta)}
+
+/* Smart planning additions reuse the existing paper card and editorial rule language. */
+.optimizer-strip{margin:0 var(--gutter);padding:clamp(24px,3vw,38px);background:var(--bone);border:var(--rule);display:grid;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr) auto;gap:28px;align-items:center}
+.optimizer-strip .kicker{display:flex;align-items:center;gap:7px;margin-bottom:10px}.optimizer-strip h3{margin:0;font-size:clamp(25px,2.6vw,36px)}.optimizer-strip h3 em{font-style:normal}.optimizer-strip>div>p:not(.kicker){margin:9px 0 0;font-size:13px;color:var(--ink-soft);line-height:1.6;max-width:45ch}
+.optimizer-results{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;border-left:1px solid var(--line-soft);padding-left:28px}.optimizer-results span{font-size:10px;color:var(--muted);line-height:1.4}.optimizer-results strong{display:block;font-family:var(--serif);font-size:20px;font-weight:400;color:var(--ink)}
+.optimizer-actions{display:flex;flex-direction:column;gap:8px}.optimizer-actions .outline-button{padding:11px 13px;font-size:8px;justify-content:space-between}.optimizer-accept{background:var(--terracotta);color:#fff;padding:12px 14px;font-size:8px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;gap:10px}.optimizer-applied{display:flex;align-items:center;gap:7px;color:var(--olive);font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
 
 /* ============================================================
    HORIZONTAL GALLERY
@@ -416,6 +435,10 @@ em{font-style:italic;color:var(--terracotta)}
 .route-stats div{display:flex;flex-direction:column;gap:6px}
 .route-stats strong{font-family:var(--serif);font-size:clamp(32px,4vw,54px);font-weight:300;color:var(--terracotta);line-height:1}
 .route-stats small{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.trip-score{border-top:var(--rule);padding-top:18px;display:grid;grid-template-columns:auto auto 1fr;align-items:baseline;gap:10px 14px;max-width:530px}
+.trip-score>span{font-size:9px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.trip-score strong{font-family:var(--serif);font-size:30px;font-weight:400;color:var(--terracotta)}.trip-score strong small{font-family:var(--sans);font-size:10px;color:var(--muted);letter-spacing:0}
+.trip-score p{grid-column:1/-1;margin:0;font-size:12px;color:var(--ink-soft);line-height:1.6}
 .outline-button{
   position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:16px;
   border:1px solid var(--ink);padding:16px 28px;
@@ -686,6 +709,7 @@ em{font-style:italic;color:var(--terracotta)}
   .detail-card{position:static}
   .stay-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .budget-layout{grid-template-columns:1fr;justify-items:center}
+  .optimizer-strip{grid-template-columns:1fr 1fr}.optimizer-actions,.optimizer-applied{grid-column:1/-1;justify-self:start}.optimizer-actions{flex-direction:row}.optimizer-actions .outline-button{min-width:100px}
 }
 @media(max-width:760px){
   /* --- header --- */
@@ -712,6 +736,7 @@ em{font-style:italic;color:var(--terracotta)}
   .day-row{grid-template-columns:auto minmax(0,1fr) auto;gap:14px}
   .day-icon,.arrow{display:none}
   .day-row:hover,.day-row.selected{padding-left:14px}
+  .optimizer-strip{grid-template-columns:1fr;gap:20px}.optimizer-results{border-left:0;border-top:1px solid var(--line-soft);padding:17px 0 0}.optimizer-actions{width:100%}.optimizer-actions>*{flex:1}
 
   /* --- gallery: the pinned rail becomes a native swipe strip --- */
   .gallery-viewport{
@@ -725,7 +750,7 @@ em{font-style:italic;color:var(--terracotta)}
 
   /* --- everything else --- */
   .stay-grid{grid-template-columns:1fr}
-  .route-stats{flex-wrap:wrap;gap:20px 28px}
+.route-stats{flex-wrap:wrap;gap:20px 28px}
   .weather-card footer{flex-wrap:wrap;row-gap:12px}
   .footer{grid-template-columns:1fr;justify-items:center;text-align:center}
   .planner-backdrop{padding:0}
