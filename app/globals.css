@@ -17,8 +17,8 @@
   --clay:#d9a273;
   --line:rgba(36,26,20,.14);
   --line-soft:rgba(36,26,20,.07);
-  --serif:"Fraunces",Georgia,"Times New Roman",serif;
-  --sans:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --serif:var(--font-fraunces),Georgia,"Times New Roman",serif;
+  --sans:var(--font-archivo),"Helvetica Neue",Arial,sans-serif;
   --gutter:clamp(20px,5vw,84px);
   --rule:1px solid var(--line);
 }
@@ -161,6 +161,7 @@ em{font-style:italic;color:var(--terracotta)}
 .curtain-inner small{display:block;margin-top:18px;font-size:10px;letter-spacing:.34em;text-transform:uppercase;opacity:.5}
 .curtain-bar{margin:26px auto 0;width:min(320px,60vw);height:1px;background:rgba(250,246,240,.22);overflow:hidden}
 .curtain-bar i{display:block;height:100%;width:100%;background:var(--clay);transform:scaleX(0);transform-origin:left}
+.curtain.curtain-done{visibility:hidden;pointer-events:none}
 
 /* ============================================================
    DUOTONE IMAGE SYSTEM
@@ -585,15 +586,35 @@ em{font-style:italic;color:var(--terracotta)}
 .footer .brand{color:var(--bone)}
 .footer p{margin:0;text-align:center}
 .footer-links{display:flex;gap:20px;align-items:center}
-.footer button{font-size:11px;transition:color .3s}
-.footer button:hover{color:var(--clay)}
+.footer button,.footer a{font-size:11px;color:inherit;transition:color .3s}
+.footer button:hover,.footer a:hover{color:var(--clay)}
+
+.legal-page{
+  max-width:720px;margin:0 auto;padding:clamp(120px,16vh,160px) var(--gutter) clamp(80px,12vh,120px);
+}
+.legal-page h1{margin:12px 0 24px}
+.legal-page p{margin:0 0 18px;color:var(--ink-soft);line-height:1.7;max-width:60ch}
+.legal-page .text-link{margin-top:36px}
+
+html.scroll-locked,
+body.scroll-locked{
+  overflow:hidden;
+  height:100%;
+}
 
 /* ============================================================
    PLANNER SHEET
    ============================================================ */
-.planner-backdrop{position:fixed;inset:0;z-index:200;background:rgba(24,17,13,.7);backdrop-filter:blur(14px);display:grid;place-items:center;padding:24px}
+.planner-backdrop{
+  position:fixed;inset:0;z-index:200;background:rgba(24,17,13,.7);backdrop-filter:blur(14px);
+  overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:24px;scrollbar-width:none;-ms-overflow-style:none;
+}
+.planner-backdrop::-webkit-scrollbar{display:none}
 .planner-sheet{
-  width:min(800px,100%);max-height:92vh;overflow:auto;background:var(--bone);
+  width:min(800px,100%);margin:0 auto 24px;
+  background:var(--bone);
   padding:clamp(26px,3.4vw,44px);position:relative;box-shadow:0 40px 110px rgba(24,17,13,.4);
 }
 .planner-sheet::before{
@@ -671,7 +692,12 @@ em{font-style:italic;color:var(--terracotta)}
 .chat-panel header strong{font-family:var(--serif);font-size:15px;font-weight:400}
 .chat-panel header small{font-size:9px;color:rgba(250,246,240,.5);letter-spacing:.1em}
 .chat-panel header>button{font-size:22px;color:rgba(250,246,240,.6)}
-.chat-body{padding:20px 18px;display:flex;flex-direction:column;gap:16px}
+.chat-body{
+  padding:20px 18px;display:flex;flex-direction:column;gap:16px;
+  max-height:min(42vh,320px);overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:none;-ms-overflow-style:none;
+}
+.chat-body::-webkit-scrollbar{display:none}
 .assistant-message{margin:0;background:var(--sand);padding:15px 17px;font-size:13px;line-height:1.65;color:var(--ink-soft)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips button{border:1px solid var(--line);padding:9px 13px;font-size:11px;transition:.3s}
@@ -754,7 +780,7 @@ em{font-style:italic;color:var(--terracotta)}
   .weather-card footer{flex-wrap:wrap;row-gap:12px}
   .footer{grid-template-columns:1fr;justify-items:center;text-align:center}
   .planner-backdrop{padding:0}
-  .planner-sheet{height:100%;max-height:none}
+  .planner-sheet{min-height:100dvh;padding:30px 22px}
   .planner-grid{grid-template-columns:1fr}
   .planner-grid .wide{grid-column:auto}
   .interest-grid{grid-template-columns:repeat(3,1fr)}

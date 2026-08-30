@@ -1,22 +1,43 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { SplitText } from "gsap/SplitText";
 import Lenis from "lenis";
 
-gsap.registerPlugin(ScrollTrigger, SplitText);
+gsap.registerPlugin(ScrollTrigger);
 
 const EASE = "power3.out";
+
+function hideCurtain(curtain: Element | null) {
+  curtain?.classList.add("curtain-done");
+}
+
+export type MotionControls = {
+  scrollTo: (target: string) => void;
+  setScrollLocked: (locked: boolean) => void;
+};
 
 /**
  * Wires up the whole showreel motion layer: smooth scroll, the load curtain,
  * split-text headlines, scroll reveals, parallax, the horizontal gallery and
  * the number counters. Everything is scoped to `root` and reverted on unmount.
  */
-export function useMotion(root: React.RefObject<HTMLElement | null>) {
+export function useMotion(root: React.RefObject<HTMLElement | null>): MotionControls {
   const lenisRef = useRef<Lenis | null>(null);
+
+  const setScrollLocked = useCallback((locked: boolean) => {
+    // Background lock is handled via html/body classes. Avoid lenis.stop() because
+    // it also blocks native scrolling inside overlays like the trip builder.
+    if (!locked) lenisRef.current?.start();
+  }, []);
+
+  const scrollTo = useCallback((target: string) => {
+    const node = document.getElementById(target);
+    if (!node) return;
+    if (lenisRef.current) lenisRef.current.scrollTo(node, { offset: -70 });
+    else node.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -26,7 +47,7 @@ export function useMotion(root: React.RefObject<HTMLElement | null>) {
     // timeline. If anything in the motion layer throws, never leave it covering
     // the page.
     const curtainFailsafe = window.setTimeout(() => {
-      document.querySelector(".curtain")?.remove();
+      hideCurtain(document.querySelector(".curtain"));
     }, 4000);
 
     if (!el) return () => window.clearTimeout(curtainFailsafe);
@@ -34,13 +55,19 @@ export function useMotion(root: React.RefObject<HTMLElement | null>) {
     if (reduced) {
       // Nothing animates; just make sure nothing is left invisible.
       gsap.set(el.querySelectorAll("[data-reveal], [data-stagger] > *"), { clearProps: "all", opacity: 1 });
-      document.querySelector(".curtain")?.remove();
+      hideCurtain(document.querySelector(".curtain"));
       window.clearTimeout(curtainFailsafe);
       return;
     }
 
     /* ---------- smooth scroll ---------- */
-    const lenis = new Lenis({ duration: 1.15, smoothWheel: true });
+    const lenis = new Lenis({
+      duration: 1.15,
+      smoothWheel: true,
+      prevent: (node) => node instanceof HTMLElement && Boolean(
+        node.closest(".planner-backdrop, .chat-panel, .mobile-menu"),
+      ),
+    });
     lenisRef.current = lenis;
     lenis.on("scroll", ScrollTrigger.update);
     const raf = (time: number) => lenis.raf(time * 1000);
@@ -62,23 +89,17 @@ export function useMotion(root: React.RefObject<HTMLElement | null>) {
             yPercent: -100,
             duration: 1,
             ease: "expo.inOut",
-            onComplete: () => curtain.remove(),
+            onComplete: () => hideCurtain(curtain),
           }, "-=.1");
       }
 
-      /* ---------- 2. hero headline, split by line then char ---------- */
-      const heading = el.querySelector<HTMLElement>(".hero h1");
-      if (heading) {
-        const split = new SplitText(heading, { type: "lines,chars", linesClass: "line-mask" });
-        intro.from(split.chars, {
-          yPercent: 118,
-          opacity: 0,
-          rotate: 4,
-          duration: 1,
-          ease: "power4.out",
-          stagger: { each: .016, from: "start" },
-        }, "-=.55");
-      }
+      /* ---------- 2. hero headline ---------- */
+      intro.from(".hero h1", {
+        yPercent: 28,
+        opacity: 0,
+        duration: 1,
+        ease: "power4.out",
+      }, "-=.55");
 
       intro.from(".hero-eyebrow, .hero-copy, .scroll-cue, .hero-rail", {
         y: 26, opacity: 0, duration: .8, ease: EASE, stagger: .07,
@@ -106,15 +127,13 @@ export function useMotion(root: React.RefObject<HTMLElement | null>) {
         scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true },
       });
 
-      /* ---------- 4. section headings — line-masked reveal ---------- */
+      /* ---------- 4. section headings ---------- */
       el.querySelectorAll<HTMLElement>("[data-split]").forEach((node) => {
-        const split = new SplitText(node, { type: "lines", linesClass: "line-mask" });
-        const inner = new SplitText(split.lines, { type: "lines" });
-        gsap.from(inner.lines, {
-          yPercent: 110,
+        gsap.from(node, {
+          y: 48,
+          opacity: 0,
           duration: 1,
           ease: "power4.out",
-          stagger: .09,
           scrollTrigger: { trigger: node, start: "top 88%" },
         });
       });
@@ -180,7 +199,10 @@ export function useMotion(root: React.RefObject<HTMLElement | null>) {
         gsap.to(obj, {
           v: target, duration: 1.6, ease: "power2.out",
           scrollTrigger: { trigger: node, start: "top 92%" },
-          onUpdate: () => { node.textContent = String(Math.round(obj.v)); },
+          onUpdate: () => {
+            const output = node.querySelector<HTMLElement>(".count-output");
+            (output ?? node).textContent = String(Math.round(obj.v));
+          },
         });
       });
 
@@ -257,11 +279,5 @@ export function useMotion(root: React.RefObject<HTMLElement | null>) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Lenis-aware smooth scroll for the nav links. */
-  return function scrollTo(target: string) {
-    const node = document.getElementById(target);
-    if (!node) return;
-    if (lenisRef.current) lenisRef.current.scrollTo(node, { offset: -70 });
-    else node.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  return { scrollTo, setScrollLocked };
 }

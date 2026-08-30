@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Bell, Camera, Landmark, MapPin, Moon, Mountain,
   Palette, Plane, ShoppingBag, Snowflake, Sun,
-  Trees, Utensils, Compass, MessageCircle, Menu, X, Sparkles,
-  Clock3, Coffee, Plus, RotateCcw, Check,
+  Trees, Utensils, Compass, MessageCircle, Menu, X,
+  Clock3, Coffee, Plus, Check,
 } from "lucide-react";
 import { useMotion } from "./useMotion";
 import type { Trip } from "../lib/travel-types";
@@ -71,7 +72,8 @@ type WeatherData = {
 
 export default function Home() {
   const pageRef = useRef<HTMLElement>(null);
-  const scrollTo = useMotion(pageRef);
+  const { scrollTo, setScrollLocked } = useMotion(pageRef);
+  const [portalReady, setPortalReady] = useState(false);
 
   const [active, setActive] = useState("Overview");
   const [docked, setDocked] = useState(false);
@@ -95,7 +97,6 @@ export default function Home() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [dataUpdated, setDataUpdated] = useState("");
   const [savedTrip, setSavedTrip] = useState<Trip | null>(null);
-  const [optimizerState, setOptimizerState] = useState<"idle" | "ready" | "accepted">("idle");
   const [nearbyAdded, setNearbyAdded] = useState<number[]>([]);
 
   const days = useMemo(() => Array.from({ length: duration }, (_, index) => {
@@ -142,31 +143,6 @@ export default function Home() {
   const NearbyIcon = nearbyStop.icon;
   const tripScore = Math.max(78, 91 - Math.max(0, duration - 7) - Math.max(0, interests.length - 3) * 2);
   const dayIntensity = selectedDay === 1 ? "Packed" : selectedDay === 2 ? "Easy" : "Balanced";
-
-  async function optimizeTrip() {
-    if (savedTrip) {
-      try {
-        const response = await fetch(`/api/trips/${savedTrip.id}/optimize`, { method: "POST" });
-        if (!response.ok) throw new Error("Optimizer unavailable");
-        const result = await response.json() as { trip: Trip };
-        setSavedTrip(result.trip);
-      } catch {
-        notify("Optimizer is offline — showing the local recommendation");
-      }
-    }
-    setOptimizerState("ready");
-    notify("Trip optimized — review the suggested changes");
-  }
-
-  function acceptOptimization() {
-    setOptimizerState("accepted");
-    notify("Smart route updates applied to your journey");
-  }
-
-  function undoOptimization() {
-    setOptimizerState("idle");
-    notify("Your original itinerary has been restored");
-  }
 
   function addNearbyStop(index: number) {
     setNearbyAdded((current) => current.includes(index) ? current : [...current, index]);
@@ -274,7 +250,7 @@ export default function Home() {
           destination: matched,
           startDate,
           endDate: endDate.toISOString().slice(0, 10),
-          travelers,
+          travelers: travellers,
           budget,
           preferences: { interests, style: "Balanced", activityLevel: "Moderate", vibe: interests.join(", ") },
         };
@@ -319,11 +295,94 @@ export default function Home() {
     scrollTo(section === "Overview" ? "top" : section.toLowerCase());
   }
 
-  // Hold the page still while the mobile menu is open.
+  async function shareJourney() {
+    const title = `${destination} — ${duration}-day journey`;
+    const text = [
+      dateLabel,
+      `${duration} days · ${travellers} travellers · ₹${budget.toLocaleString("en-IN")} budget`,
+      interests.length ? `Interests: ${interests.join(", ")}` : "",
+    ].filter(Boolean).join("\n");
+    const url = window.location.href;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(`${title}\n${text}\n${url}`);
+      notify("Journey details copied to clipboard");
+    } catch {
+      notify("Could not share — copy the page URL from your browser");
+    }
+  }
+
+  function openPlannerFromQuery() {
+    const match = query.match(/^(.*?)(?:\s+for\s+|\s+in\s+)/i);
+    if (match?.[1]?.trim()) setDraftDestination(match[1].trim());
+    setPlannerOpen(true);
+  }
+
+  function slowDownTrip() {
+    setDuration((current) => Math.min(14, current + 1));
+    setChatOpen(false);
+    setPlannerOpen(true);
+    notify("Added a day to give your route more breathing room");
+  }
+
+  function focusOnFood() {
+    setInterests((current) => (current.includes("Food") ? current : [...current, "Food"]));
+    setChatOpen(false);
+    setPlannerOpen(true);
+    notify("Food is now highlighted in your trip builder");
+  }
+
+  function submitConcierge(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const input = event.currentTarget.elements.namedItem("concierge-message") as HTMLInputElement | null;
+    const message = input?.value.trim();
+    if (!message) return;
+    setQuery(message);
+    setChatOpen(false);
+    setPlannerOpen(true);
+    notify("Opening trip builder with your request");
+  }
+
+  // Keep overlays scrollable while the landing page stays fixed underneath.
+  const overlayOpen = menuOpen || plannerOpen || chatOpen;
+
   useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [menuOpen]);
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!overlayOpen) return;
+
+    const scrollY = window.scrollY;
+    document.documentElement.classList.add("scroll-locked");
+    document.body.classList.add("scroll-locked");
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.classList.remove("scroll-locked");
+      document.body.classList.remove("scroll-locked");
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+      setScrollLocked(false);
+    };
+  }, [overlayOpen, setScrollLocked]);
 
   const marqueeWords = [destination, ...interests, `${duration} days`, `${travellers} travellers`];
   const marqueeTrack = (
@@ -339,6 +398,7 @@ export default function Home() {
   );
 
   return (
+    <>
     <main id="top" ref={pageRef}>
       <div className="curtain">
         <div className="curtain-inner">
@@ -359,10 +419,10 @@ export default function Home() {
           ))}
         </nav>
         <div className="header-actions">
-          <button className="icon-button" aria-label="Notifications" onClick={() => notify("You’re all caught up")}>
+          <button className="icon-button" aria-label="Notifications" onClick={() => jumpTo("Itinerary")}>
             <Bell size={15} strokeWidth={1.7} /><span className="ping" />
           </button>
-          <button className="profile" onClick={() => notify("Profile ready for Akira")}>A</button>
+          <button className="profile" onClick={() => setPlannerOpen(true)} aria-label="Open trip builder">A</button>
           <button
             className="menu-toggle"
             aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -432,7 +492,7 @@ export default function Home() {
           <small>Your trip, in your words</small>
           <input aria-label="Trip prompt" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        <button data-magnetic onClick={() => setPlannerOpen(true)}><span>Refine trip</span><span>→</span></button>
+        <button data-magnetic onClick={openPlannerFromQuery}><span>Refine trip</span><span>↗</span></button>
       </div>
 
       <section className="marquee" aria-label="Trip highlights">
@@ -449,9 +509,6 @@ export default function Home() {
           </div>
           <div className="itinerary-intro" data-reveal>
             <p>A responsive plan for {destination}, rebuilt around your dates, your pace and the things you actually care about.</p>
-            <button className="outline-button smart-trigger" onClick={optimizeTrip}>
-              <span><Sparkles size={14} /> Make my trip better</span><span>→</span>
-            </button>
           </div>
         </div>
 
@@ -513,35 +570,13 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-              <button className="text-link" onClick={() => notify(`Day ${selectedDay + 1} opened in the planner`)}>
-                View full day <span>→</span>
+              <button className="text-link" onClick={() => jumpTo("Itinerary")}>
+                View full day <span>↗</span>
               </button>
             </div>
           </aside>
         </div>
       </section>
-
-      {(optimizerState === "ready" || optimizerState === "accepted") && (
-        <section className="optimizer-strip" aria-live="polite">
-          <div>
-            <p className="kicker"><Sparkles size={13} /> Smart trip optimizer</p>
-            <h3>Trip optimized <em>✨</em></h3>
-            <p>{optimizerState === "accepted" ? "Your itinerary now has a cleaner route and a proper lunch pause." : "I grouped close stops, opened up Day 2, and placed a lunch stop along your route."}</p>
-          </div>
-          <div className="optimizer-results">
-            <span><strong>42 min</strong> travel saved</span>
-            <span><strong>1</strong> unnecessary route removed</span>
-            <span><strong>2</strong> activities rearranged</span>
-            <span><strong>1</strong> meal stop added</span>
-          </div>
-          {optimizerState === "ready" ? (
-            <div className="optimizer-actions">
-              <button className="outline-button" onClick={undoOptimization}><span>Undo</span><RotateCcw size={14} /></button>
-              <button className="optimizer-accept" onClick={acceptOptimization}><span>Accept changes</span><Check size={15} /></button>
-            </div>
-          ) : <span className="optimizer-applied"><Check size={15} /> Applied</span>}
-        </section>
-      )}
 
       {/* ---------------- HORIZONTAL GALLERY ---------------- */}
       <section className="gallery" id="moments">
@@ -582,15 +617,15 @@ export default function Home() {
           <h2 data-split>A journey that<br /><em>flows naturally.</em></h2>
           <p data-reveal>The route reshapes itself as the trip changes, balancing the highlights with enough open space to actually enjoy them.</p>
           <div className="route-stats">
-            <div><strong data-count={duration * 18}>0</strong><small>Kilometres</small></div>
-            <div><strong data-count={Math.min(4, Math.max(1, interests.length))}>0</strong><small>Areas</small></div>
-            <div><strong data-count={duration * 3}>0</strong><small>Experiences</small></div>
+            <div><strong data-count={duration * 18}><span className="count-output">0</span></strong><small>Kilometres</small></div>
+            <div><strong data-count={Math.min(4, Math.max(1, interests.length))}><span className="count-output">0</span></strong><small>Areas</small></div>
+            <div><strong data-count={duration * 3}><span className="count-output">0</span></strong><small>Experiences</small></div>
           </div>
           <div className="trip-score">
             <span>Trip score</span><strong>{tripScore}<small>/100</small></strong>
             <p>{selectedDay === 1 ? "Great route — Day 2 could use more free time." : "Great itinerary. Your route is efficient and the days have room to breathe."}</p>
           </div>
-          <button className="outline-button" data-magnetic onClick={() => notify("Interactive map is ready")}>
+          <button className="outline-button" data-magnetic onClick={() => jumpTo("Route")}>
             <span>Explore interactive map</span><span>↗</span>
           </button>
         </div>
@@ -616,7 +651,7 @@ export default function Home() {
             <p className="kicker">Handpicked for you</p>
             <h2 data-split>Stay somewhere<br /><em>worth remembering.</em></h2>
           </div>
-          <button className="text-link" onClick={() => notify("Showing 12 curated stays")}>View all stays <span>→</span></button>
+          <button className="text-link" onClick={() => jumpTo("Stays")}>View all stays <span>↗</span></button>
         </div>
         <div className="stay-grid" data-stagger>
           {stays.map((stay, index) => (
@@ -674,8 +709,8 @@ export default function Home() {
               ))}
             </div>
           </div>
-          <button className="outline-button" data-magnetic onClick={() => notify("Budget dashboard opened")}>
-            <span>Open budget dashboard</span><span>→</span>
+          <button className="outline-button" data-magnetic onClick={() => jumpTo("Budget")}>
+            <span>Open budget dashboard</span><span>↗</span>
           </button>
         </article>
 
@@ -720,7 +755,7 @@ export default function Home() {
         <p className="japanese">旅は、ここから。</p>
         <h2 data-split>Your journey starts<br /><em>before you leave.</em></h2>
         <p>Everything is planned. All that’s left is to look forward to it.</p>
-        <button data-magnetic onClick={() => notify("Your journey is ready to share")}>
+        <button data-magnetic onClick={() => void shareJourney()}>
           <span>Share this journey</span><span>↗</span>
         </button>
       </section>
@@ -729,108 +764,117 @@ export default function Home() {
         <div className="brand"><span className="brand-mark">V</span><span>VOYAGE</span></div>
         <p>Thoughtful journeys, beautifully planned.</p>
         <div className="footer-links">
-          <button>Privacy</button><button>Terms</button><span>© 2026 Voyage</span>
+          <a href="/privacy">Privacy</a><a href="/terms">Terms</a><span>© 2026 Voyage</span>
         </div>
       </footer>
-
-      {/* ---------------- PLANNER ---------------- */}
-      {plannerOpen && (
-        <div className="planner-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPlannerOpen(false)}>
-          <section className="planner-sheet" role="dialog" aria-modal="true" aria-labelledby="planner-title">
-            <header>
-              <div><p className="kicker">Live trip builder</p><h2 id="planner-title">Where next?</h2></div>
-              <button aria-label="Close trip builder" onClick={() => setPlannerOpen(false)}>×</button>
-            </header>
-            <p className="planner-intro">Change anything. Weather is fetched live, and the route, daily plan, dates and budget recalculate instantly.</p>
-            <div className="planner-grid">
-              <label className="wide">
-                <span>Destination city</span>
-                <input value={draftDestination} onChange={(event) => setDraftDestination(event.target.value)} placeholder="Try Paris, Bali or New York" />
-              </label>
-              <label>
-                <span>Start date</span>
-                <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-              </label>
-              <label>
-                <span>Trip length</span>
-                <div className="stepper">
-                  <button onClick={() => setDuration(Math.max(2, duration - 1))} aria-label="Fewer days">−</button>
-                  <strong>{duration} days</strong>
-                  <button onClick={() => setDuration(Math.min(14, duration + 1))} aria-label="More days">+</button>
-                </div>
-              </label>
-              <label>
-                <span>Travellers</span>
-                <div className="stepper">
-                  <button onClick={() => setTravellers(Math.max(1, travellers - 1))} aria-label="Fewer travellers">−</button>
-                  <strong>{travellers}</strong>
-                  <button onClick={() => setTravellers(Math.min(12, travellers + 1))} aria-label="More travellers">+</button>
-                </div>
-              </label>
-              <label>
-                <span>Total budget (₹)</span>
-                <input type="number" min="10000" step="5000" value={budget} onChange={(event) => setBudget(Math.max(10000, Number(event.target.value)))} />
-              </label>
-            </div>
-            <fieldset>
-              <legend>What are you into?</legend>
-              <div className="interest-grid">
-                {interestOptions.map((interest) => (
-                  <button
-                    key={interest}
-                    className={interests.includes(interest) ? "chosen" : ""}
-                    onClick={() => setInterests((current) => (
-                      current.includes(interest)
-                        ? (current.length > 1 ? current.filter((item) => item !== interest) : current)
-                        : [...current, interest]
-                    ))}
-                  >
-                    {interestIcon(interest)}{interest}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <button
-              className={`generate-button ${isGenerating ? "generating" : ""}`}
-              disabled={isGenerating || !draftDestination.trim()}
-              onClick={() => void generateTrip()}
-            >
-              <span>{isGenerating ? "Composing your journey" : "Generate my journey"}</span>
-              <i>{isGenerating ? "·  ·  ·" : "→"}</i>
-            </button>
-            <small className="data-note">Live destination and forecast data from Open-Meteo. Cost estimates update from your chosen budget.</small>
-          </section>
-        </div>
-      )}
-
-      <button className={`ai-fab ${chatOpen ? "open" : ""}`} aria-label="Open concierge" onClick={() => setChatOpen(!chatOpen)}>
-        {chatOpen ? <X size={20} /> : <MessageCircle size={20} strokeWidth={1.7} />}
-      </button>
-
-      {chatOpen && (
-        <aside className="chat-panel">
-          <header>
-            <div>
-              <span><Compass size={16} strokeWidth={1.7} /></span>
-              <p><strong>Voyage concierge</strong><small>Online · ready to help</small></p>
-            </div>
-            <button onClick={() => setChatOpen(false)} aria-label="Close concierge">×</button>
-          </header>
-          <div className="chat-body">
-            <p className="assistant-message">I’ve got your {destination} journey. Want to slow down a city, swap a restaurant, or make room for something new?</p>
-            <div className="chips">
-              <button onClick={() => notify("That city now has more breathing room")}>Slow it down</button>
-              <button onClick={() => notify("Finding the best local food")}>Find better food</button>
-            </div>
-          </div>
-          <form onSubmit={(event) => { event.preventDefault(); notify("I’m updating your journey"); }}>
-            <input aria-label="Message concierge" placeholder="Ask about your trip…" />
-            <button aria-label="Send">↑</button>
-          </form>
-        </aside>
-      )}
-
-      {toast && <div className="toast"><i className="toast-dot" />{toast}</div>}
     </main>
+    {portalReady && createPortal(
+      <>
+        {plannerOpen && (
+          <div
+            className="planner-backdrop"
+            data-lenis-prevent
+            onMouseDown={(event) => event.target === event.currentTarget && setPlannerOpen(false)}
+          >
+            <section className="planner-sheet" role="dialog" aria-modal="true" aria-labelledby="planner-title">
+              <header>
+                <div><p className="kicker">Live trip builder</p><h2 id="planner-title">Where next?</h2></div>
+                <button aria-label="Close trip builder" onClick={() => setPlannerOpen(false)}>×</button>
+              </header>
+              <p className="planner-intro">Change anything. Weather is fetched live, and the route, daily plan, dates and budget recalculate instantly.</p>
+              <div className="planner-grid">
+                <label className="wide">
+                  <span>Destination city</span>
+                  <input value={draftDestination} onChange={(event) => setDraftDestination(event.target.value)} placeholder="Try Paris, Bali or New York" />
+                </label>
+                <label>
+                  <span>Start date</span>
+                  <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                </label>
+                <label>
+                  <span>Trip length</span>
+                  <div className="stepper">
+                    <button type="button" onClick={() => setDuration(Math.max(2, duration - 1))} aria-label="Fewer days">−</button>
+                    <strong>{duration} days</strong>
+                    <button type="button" onClick={() => setDuration(Math.min(14, duration + 1))} aria-label="More days">+</button>
+                  </div>
+                </label>
+                <label>
+                  <span>Travellers</span>
+                  <div className="stepper">
+                    <button type="button" onClick={() => setTravellers(Math.max(1, travellers - 1))} aria-label="Fewer travellers">−</button>
+                    <strong>{travellers}</strong>
+                    <button type="button" onClick={() => setTravellers(Math.min(12, travellers + 1))} aria-label="More travellers">+</button>
+                  </div>
+                </label>
+                <label>
+                  <span>Total budget (₹)</span>
+                  <input type="number" min="10000" step="5000" value={budget} onChange={(event) => setBudget(Math.max(10000, Number(event.target.value)))} />
+                </label>
+              </div>
+              <fieldset>
+                <legend>What are you into?</legend>
+                <div className="interest-grid">
+                  {interestOptions.map((interest) => (
+                    <button
+                      key={interest}
+                      type="button"
+                      className={interests.includes(interest) ? "chosen" : ""}
+                      onClick={() => setInterests((current) => (
+                        current.includes(interest)
+                          ? (current.length > 1 ? current.filter((item) => item !== interest) : current)
+                          : [...current, interest]
+                      ))}
+                    >
+                      {interestIcon(interest)}{interest}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <button
+                className={`generate-button ${isGenerating ? "generating" : ""}`}
+                disabled={isGenerating || !draftDestination.trim()}
+                onClick={() => void generateTrip()}
+              >
+                <span>{isGenerating ? "Composing your journey" : "Generate my journey"}</span>
+                <i>{isGenerating ? "·  ·  ·" : "↗"}</i>
+              </button>
+              <small className="data-note">Live destination and forecast data from Open-Meteo. Cost estimates update from your chosen budget.</small>
+            </section>
+          </div>
+        )}
+
+        <button className={`ai-fab ${chatOpen ? "open" : ""}`} aria-label="Open concierge" onClick={() => setChatOpen(!chatOpen)}>
+          {chatOpen ? <X size={20} /> : <MessageCircle size={20} strokeWidth={1.7} />}
+        </button>
+
+        {chatOpen && (
+          <aside className="chat-panel" data-lenis-prevent>
+            <header>
+              <div>
+                <span><Compass size={16} strokeWidth={1.7} /></span>
+                <p><strong>Voyage concierge</strong><small>Online · ready to help</small></p>
+              </div>
+              <button onClick={() => setChatOpen(false)} aria-label="Close concierge">×</button>
+            </header>
+            <div className="chat-body">
+              <p className="assistant-message">I’ve got your {destination} journey. Want to slow down a city, swap a restaurant, or make room for something new?</p>
+              <div className="chips">
+                <button type="button" onClick={slowDownTrip}>Slow it down</button>
+                <button type="button" onClick={focusOnFood}>Find better food</button>
+              </div>
+            </div>
+            <form onSubmit={submitConcierge}>
+              <input name="concierge-message" aria-label="Message concierge" placeholder="Ask about your trip…" />
+              <button type="submit" aria-label="Send">↑</button>
+            </form>
+          </aside>
+        )}
+
+        {toast && <div className="toast"><i className="toast-dot" />{toast}</div>}
+      </>,
+      document.body,
+    )}
+  </>
   );
 }

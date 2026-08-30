@@ -1,5 +1,20 @@
 import type { Metadata } from "next";
+import { Archivo, Fraunces } from "next/font/google";
 import "./globals.css";
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  axes: ["opsz"],
+  variable: "--font-fraunces",
+  display: "swap",
+});
+
+const archivo = Archivo({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-archivo",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Voyage — journeys, composed by hand",
@@ -21,15 +36,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Archivo:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${fraunces.variable} ${archivo.variable}`}>
       <body>{children}</body>
     </html>
   );
