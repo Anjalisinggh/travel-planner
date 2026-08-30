@@ -601,22 +601,26 @@ body.scroll-locked{
   overflow:hidden;
   height:100%;
 }
+body.overlay-open main{
+  pointer-events:none;
+}
 
 /* ============================================================
    PLANNER SHEET
    ============================================================ */
 .planner-backdrop{
   position:fixed;inset:0;z-index:200;background:rgba(24,17,13,.7);backdrop-filter:blur(14px);
-  overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
-  -webkit-overflow-scrolling:touch;
-  padding:24px;scrollbar-width:none;-ms-overflow-style:none;
+  display:flex;align-items:flex-start;justify-content:center;
+  overflow:hidden;overscroll-behavior:none;padding:24px;
 }
-.planner-backdrop::-webkit-scrollbar{display:none}
 .planner-sheet{
-  width:min(800px,100%);margin:0 auto 24px;
+  width:min(800px,100%);max-height:calc(100dvh - 48px);margin:auto;
+  overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;
   background:var(--bone);
   padding:clamp(26px,3.4vw,44px);position:relative;box-shadow:0 40px 110px rgba(24,17,13,.4);
+  scrollbar-width:none;-ms-overflow-style:none;
 }
+.planner-sheet::-webkit-scrollbar{width:0;height:0;display:none}
 .planner-sheet::before{
   content:"";position:absolute;inset:0 0 auto;height:4px;
   background:linear-gradient(90deg,var(--terracotta),var(--clay),var(--olive),var(--terracotta));
@@ -779,8 +783,8 @@ body.scroll-locked{
 .route-stats{flex-wrap:wrap;gap:20px 28px}
   .weather-card footer{flex-wrap:wrap;row-gap:12px}
   .footer{grid-template-columns:1fr;justify-items:center;text-align:center}
-  .planner-backdrop{padding:0}
-  .planner-sheet{min-height:100dvh;padding:30px 22px}
+  .planner-backdrop{padding:0;align-items:stretch}
+  .planner-sheet{max-height:100dvh;padding:30px 22px}
   .planner-grid{grid-template-columns:1fr}
   .planner-grid .wide{grid-column:auto}
   .interest-grid{grid-template-columns:repeat(3,1fr)}

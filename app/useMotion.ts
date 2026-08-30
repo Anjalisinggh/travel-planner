@@ -16,6 +16,7 @@ function hideCurtain(curtain: Element | null) {
 export type MotionControls = {
   scrollTo: (target: string) => void;
   setScrollLocked: (locked: boolean) => void;
+  restoreScroll: (position: number) => void;
 };
 
 /**
@@ -27,9 +28,15 @@ export function useMotion(root: React.RefObject<HTMLElement | null>): MotionCont
   const lenisRef = useRef<Lenis | null>(null);
 
   const setScrollLocked = useCallback((locked: boolean) => {
-    // Background lock is handled via html/body classes. Avoid lenis.stop() because
-    // it also blocks native scrolling inside overlays like the trip builder.
-    if (!locked) lenisRef.current?.start();
+    const lenis = lenisRef.current;
+    if (!lenis) return;
+    if (locked) lenis.stop();
+    else lenis.start();
+  }, []);
+
+  const restoreScroll = useCallback((position: number) => {
+    window.scrollTo(0, position);
+    lenisRef.current?.scrollTo(position, { immediate: true });
   }, []);
 
   const scrollTo = useCallback((target: string) => {
@@ -65,7 +72,7 @@ export function useMotion(root: React.RefObject<HTMLElement | null>): MotionCont
       duration: 1.15,
       smoothWheel: true,
       prevent: (node) => node instanceof HTMLElement && Boolean(
-        node.closest(".planner-backdrop, .chat-panel, .mobile-menu"),
+        node.closest(".planner-sheet, .chat-panel, .chat-body, .mobile-menu"),
       ),
     });
     lenisRef.current = lenis;
@@ -279,5 +286,5 @@ export function useMotion(root: React.RefObject<HTMLElement | null>): MotionCont
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { scrollTo, setScrollLocked };
+  return { scrollTo, setScrollLocked, restoreScroll };
 }

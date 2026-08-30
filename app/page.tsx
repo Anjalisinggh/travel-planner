@@ -72,7 +72,7 @@ type WeatherData = {
 
 export default function Home() {
   const pageRef = useRef<HTMLElement>(null);
-  const { scrollTo, setScrollLocked } = useMotion(pageRef);
+  const { scrollTo, setScrollLocked, restoreScroll } = useMotion(pageRef);
   const [portalReady, setPortalReady] = useState(false);
 
   const [active, setActive] = useState("Overview");
@@ -364,25 +364,63 @@ export default function Home() {
 
     const scrollY = window.scrollY;
     document.documentElement.classList.add("scroll-locked");
-    document.body.classList.add("scroll-locked");
+    document.body.classList.add("scroll-locked", "overlay-open");
     document.body.style.position = "fixed";
     document.body.style.top = `-${scrollY}px`;
     document.body.style.left = "0";
     document.body.style.right = "0";
     document.body.style.width = "100%";
+    setScrollLocked(true);
+
+    const overlayScrollSelector = ".planner-sheet, .chat-body, .mobile-menu.open";
+
+    const canScrollOverlay = (node: Element, deltaY: number) => {
+      const scrollRoot = node.closest(".planner-sheet, .chat-body, .mobile-menu.open") as HTMLElement | null;
+      if (!scrollRoot) return false;
+      const { scrollTop, scrollHeight, clientHeight } = scrollRoot;
+      if (deltaY < 0 && scrollTop > 0) return true;
+      if (deltaY > 0 && scrollTop + clientHeight < scrollHeight - 1) return true;
+      return false;
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      if (!(event.target instanceof Element)) {
+        event.preventDefault();
+        return;
+      }
+      if (event.target.closest(overlayScrollSelector)) {
+        if (canScrollOverlay(event.target, event.deltaY)) return;
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!(event.target instanceof Element)) {
+        event.preventDefault();
+        return;
+      }
+      if (!event.target.closest(overlayScrollSelector)) event.preventDefault();
+    };
+
+    document.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false, capture: true });
 
     return () => {
+      document.removeEventListener("wheel", onWheel, { capture: true });
+      document.removeEventListener("touchmove", onTouchMove, { capture: true });
       document.documentElement.classList.remove("scroll-locked");
-      document.body.classList.remove("scroll-locked");
+      document.body.classList.remove("scroll-locked", "overlay-open");
       document.body.style.position = "";
       document.body.style.top = "";
       document.body.style.left = "";
       document.body.style.right = "";
       document.body.style.width = "";
-      window.scrollTo(0, scrollY);
+      restoreScroll(scrollY);
       setScrollLocked(false);
     };
-  }, [overlayOpen, setScrollLocked]);
+  }, [overlayOpen, restoreScroll, setScrollLocked]);
 
   const marqueeWords = [destination, ...interests, `${duration} days`, `${travellers} travellers`];
   const marqueeTrack = (
@@ -773,10 +811,15 @@ export default function Home() {
         {plannerOpen && (
           <div
             className="planner-backdrop"
-            data-lenis-prevent
             onMouseDown={(event) => event.target === event.currentTarget && setPlannerOpen(false)}
           >
-            <section className="planner-sheet" role="dialog" aria-modal="true" aria-labelledby="planner-title">
+            <section
+              className="planner-sheet"
+              data-lenis-prevent
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="planner-title"
+            >
               <header>
                 <div><p className="kicker">Live trip builder</p><h2 id="planner-title">Where next?</h2></div>
                 <button aria-label="Close trip builder" onClick={() => setPlannerOpen(false)}>×</button>
